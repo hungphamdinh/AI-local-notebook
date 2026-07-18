@@ -3,7 +3,9 @@ export type LocalNoteErrorCode =
   | 'empty_extraction' | 'scanned_pdf' | 'insufficient_storage'
   | 'corrupt_model' | 'checksum_mismatch' | 'unsupported_device'
   | 'model_out_of_memory' | 'generation_cancelled' | 'context_too_long'
-  | 'embedding_failure' | 'database_migration_failure' | 'model_missing';
+  | 'embedding_failure' | 'database_migration_failure' | 'model_missing'
+  | 'ollama_invalid_config' | 'ollama_unreachable' | 'ollama_model_missing'
+  | 'ollama_request_failed';
 
 export class LocalNoteError extends Error {
   constructor(

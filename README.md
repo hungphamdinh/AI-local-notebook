@@ -16,6 +16,7 @@ LocalNote AI is a standalone, local-first React Native application for importing
 - Document-only semantic/keyword retrieval with validated citation IDs and insufficient-context fallback.
 - Library, onboarding, import, overview, reader, notes/highlights, Ask, details, and settings screens.
 - Reading and notes work without AI models.
+- Optional Ollama provider for generation and embeddings on a configured local computer.
 
 Document content is never sent to a cloud inference service. Internet permission is used only when the user explicitly downloads model files.
 
@@ -59,12 +60,20 @@ Android uses PDFBox for embedded PDF text and the bundled ML Kit Latin text-reco
 
 ## Local models
 
-Open Settings or use onboarding and choose **Download recommended local AI**. The app installs:
+Open Settings or use onboarding and choose a curated generation profile. Every profile also installs the Nomic retrieval model:
 
-- Llama 3.2 1B Instruct Q4_K_M for generation, about 808 MB.
-- Nomic Embed Text v1.5 Q4_K_M for embeddings, about 84 MB.
+- **Lite:** Qwen3 0.6B Q4_0, about 409 MB, for the fastest multilingual generation.
+- **Balanced (recommended):** Llama 3.2 1B Instruct Q4_K_M, about 770 MB.
+- **Quality:** Qwen3 1.7B Q4_K_M, about 1.19 GB, for stronger devices.
+- **Retrieval:** Nomic Embed Text v1.5 Q4_K_M, about 80 MB.
 
-Downloads are saved under private app Documents storage and verified against registry SHA-256 hashes before activation. Reading, OCR, search, and manual notes remain usable when models are absent.
+The app stores one active generation model and one active retrieval model. Settings can download, activate, cancel, or remove each model independently. Downloads are saved under private app Documents storage and verified against registry SHA-256 hashes before activation. Reading, OCR, search, and manual notes remain usable when models are absent.
+
+## Ollama on your computer
+
+Start Ollama and ensure `gemma4:latest` and `nomic-embed-text:latest` are installed. On onboarding, choose **Connect and continue with Ollama**. Android Emulator reaches the host at `http://10.0.2.2:11434`; iOS Simulator uses `http://127.0.0.1:11434`. For a physical device, enter the computer's LAN address and configure Ollama to listen on that interface.
+
+Ollama mode sends only the excerpts required for embeddings, summaries, or questions to the configured computer. It never falls back to a cloud provider. Android release builds should use an HTTPS endpoint; local cleartext HTTP is enabled in debug builds for emulator development.
 
 ## Architecture
 
@@ -92,20 +101,20 @@ Large document bodies and embeddings stay in SQLite, not Zustand. Native inferen
 - Document text and prompts are not logged.
 - Deleting a document cascades through sections, chunks, embeddings, summaries, notes, highlights and chats, then removes the copied source file.
 - Deleting models unloads native contexts and removes model artifacts.
-- There is no remote AI provider or automatic network fallback.
+- There is no cloud AI provider or automatic network fallback. Ollama is an explicit local-network option.
 
 ## Current limitations
 
 - OCR currently bundles the Latin-script recognizer on Android. Additional ML Kit script packages can be added behind the same adapter.
 - Handwriting, damaged scans, unusual fonts and complex multi-column layouts can reduce OCR/text ordering quality.
-- The recommended 1B model favors mobile compatibility over desktop-model quality.
+- The mobile-sized models favor device compatibility over desktop-model quality.
 - Model speed and memory limits vary by physical device; simulators are not representative.
 - Background execution is persisted as processing state, but iOS may suspend CPU-heavy work when the app is backgrounded.
 
 ## Roadmap
 
 - Add optional CJK/Devanagari OCR packs.
-- Add a smaller fallback model to the registry for sub-3 GB devices.
+- Add optional multilingual embedding models after physical-device memory validation.
 - Move long processing to platform background schedulers where OS policy permits.
 - Add native selectable-text range callbacks for direct highlight creation.
 - Add encrypted database mode with a Keychain/Keystore-managed key.

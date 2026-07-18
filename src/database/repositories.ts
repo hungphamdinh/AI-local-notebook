@@ -77,6 +77,7 @@ export const DocumentRepository = {
       pageStart:num(row.page_start),pageEnd:num(row.page_end),embedding:row.embedding instanceof ArrayBuffer ? row.embedding : null}));
   },
   async saveEmbedding(chunkId: string, vector: ArrayBuffer): Promise<void> { await database.execute('UPDATE document_chunks SET embedding=? WHERE id=?', [vector, chunkId]); },
+  async clearEmbeddings():Promise<void>{await database.transaction(async tx=>{await tx.execute('UPDATE document_chunks SET embedding=NULL');await tx.execute(`UPDATE documents SET embedding_status='waiting_for_model'`);});},
   async delete(id: string): Promise<DocumentRecord | null> {
     const document = await this.get(id);
     await database.transaction(async tx => {
@@ -129,7 +130,9 @@ export const ModelRepository = {
     status:str(row.status) as ModelRecord['status'],downloadedAt:row.downloaded_at?str(row.downloaded_at):null,kind:str(row.kind) as ModelRecord['kind']}));},
   async upsert(model:ModelRecord):Promise<void>{await database.execute(`INSERT INTO model_records
     (id,display_name,filename,download_url,checksum,size_bytes,quantization,context_length,local_path,status,downloaded_at,kind)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET local_path=excluded.local_path,status=excluded.status,downloaded_at=excluded.downloaded_at`,
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET display_name=excluded.display_name,filename=excluded.filename,
+    download_url=excluded.download_url,checksum=excluded.checksum,size_bytes=excluded.size_bytes,quantization=excluded.quantization,
+    context_length=excluded.context_length,local_path=excluded.local_path,status=excluded.status,downloaded_at=excluded.downloaded_at,kind=excluded.kind`,
     [model.id,model.displayName,model.filename,model.downloadUrl,model.checksum,model.sizeBytes,model.quantization,model.contextLength,
     model.localPath,model.status,model.downloadedAt,model.kind]);},
 };
