@@ -38,6 +38,28 @@ npm run lint
 npm test
 ```
 
+## Automated release builds
+
+Use the release wrapper to build either platform or both. It copies the final artifacts and SHA-256 files into `artifacts/release`:
+
+```bash
+npm run release:android
+npm run release:ios
+npm run release
+```
+
+The current Android release variant uses the development key and is intended for internal APK testing. Configure a production release signing setup in `android/app/build.gradle` before distributing through Google Play.
+
+For iOS, first select your Apple team and signing profiles under **Signing & Capabilities** in Xcode. The script defaults to a development-device IPA. Other supported export modes are:
+
+```bash
+IOS_EXPORT_METHOD=release-testing npm run release:ios
+IOS_EXPORT_METHOD=app-store-connect npm run release:ios
+IOS_EXPORT_OPTIONS_PLIST=/absolute/path/ExportOptions.plist npm run release:ios
+```
+
+Set `CLEAN_BUILD=1` for clean native builds or `OUTPUT_DIR=/absolute/path` to change the artifact destination. Run `./scripts/build-release.sh --help` for all options. Signing certificates, profiles and generated artifacts are not stored by the script.
+
 ### iOS
 
 ```bash
