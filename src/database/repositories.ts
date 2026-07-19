@@ -1,20 +1,29 @@
 import type {Scalar} from '@op-engineering/op-sqlite';
 import {database} from './index';
-import type {ChunkRecord, DocumentRecord, FileType, ModelRecord, NoteRecord, SectionRecord} from '../types/domain';
+import type {ChunkRecord, DocumentListRecord, DocumentRecord, FileType, GenerationJobKind, GenerationJobRecord, GenerationType, JobStatus, ModelRecord, NoteRecord, SectionRecord} from '../types/domain';
 import {createId} from '../utils/id';
 
 const now = () => new Date().toISOString();
 const str = (value: Scalar | undefined) => String(value ?? '');
 const num = (value: Scalar | undefined) => Number(value ?? 0);
+const documentMetadataColumns=`id,title,original_filename,file_type,local_file_path,file_size,page_count,word_count,
+  character_count,extraction_status,embedding_status,processing_status,created_at,updated_at,last_opened_at`;
 
-const mapDocument = (row: Record<string, Scalar>): DocumentRecord => ({
+const mapGenerationJob = (row: Record<string, Scalar>): GenerationJobRecord => ({
+  id: str(row.id), kind: str(row.kind) as GenerationJobKind, documentId: str(row.document_id),
+  generationType: row.generation_type ? str(row.generation_type) as GenerationType : null, input: str(row.input),
+  status: str(row.status) as JobStatus, progress: num(row.progress), result: row.result ? str(row.result) : null,
+  error: row.error ? str(row.error) : null, attempts: num(row.attempts), createdAt: str(row.created_at), updatedAt: str(row.updated_at),
+});
+
+const mapDocumentList = (row: Record<string, Scalar>): DocumentListRecord => ({
   id: str(row.id), title: str(row.title), originalFilename: str(row.original_filename),
   fileType: str(row.file_type) as FileType, localFilePath: str(row.local_file_path), fileSize: num(row.file_size),
   pageCount: num(row.page_count), wordCount: num(row.word_count), characterCount: num(row.character_count),
-  extractedText: str(row.extracted_text), extractionStatus: str(row.extraction_status),
-  embeddingStatus: str(row.embedding_status), processingStatus: str(row.processing_status),
+  extractionStatus: str(row.extraction_status), embeddingStatus: str(row.embedding_status), processingStatus: str(row.processing_status),
   createdAt: str(row.created_at), updatedAt: str(row.updated_at), lastOpenedAt: row.last_opened_at ? str(row.last_opened_at) : null,
 });
+const mapDocument = (row: Record<string, Scalar>): DocumentRecord => ({...mapDocumentList(row),extractedText:str(row.extracted_text)});
 
 export const DocumentRepository = {
   async create(input: {title: string; originalFilename: string; fileType: FileType; localFilePath: string; fileSize: number}): Promise<DocumentRecord> {
@@ -27,10 +36,15 @@ export const DocumentRepository = {
     const result = await database.execute('SELECT * FROM documents WHERE id=?', [id]);
     return result.rows[0] ? mapDocument(result.rows[0]) : null;
   },
-  async list(search = ''): Promise<DocumentRecord[]> {
+  async getMetadata(id:string):Promise<DocumentListRecord|null>{
+    const result=await database.execute(`SELECT ${documentMetadataColumns} FROM documents WHERE id=?`,[id]);
+    return result.rows[0]?mapDocumentList(result.rows[0]):null;
+  },
+  async list(search = ''): Promise<DocumentListRecord[]> {
     const q = `%${search.trim()}%`;
-    const result = await database.execute('SELECT * FROM documents WHERE title LIKE ? ORDER BY COALESCE(last_opened_at, created_at) DESC', [q]);
-    return result.rows.map(mapDocument);
+    const result = await database.execute(`SELECT ${documentMetadataColumns}
+      FROM documents WHERE title LIKE ? ORDER BY COALESCE(last_opened_at, created_at) DESC`, [q]);
+    return result.rows.map(mapDocumentList);
   },
   async rename(id: string, title: string): Promise<void> {
     await database.execute('UPDATE documents SET title=?, updated_at=? WHERE id=?', [title.trim(), now(), id]);
@@ -99,7 +113,7 @@ export const ContentRepository = {
     const r = await database.execute('SELECT type,content FROM generated_contents WHERE document_id=?', [documentId]);
     return Object.fromEntries(r.rows.map(row => [str(row.type), str(row.content)]));
   },
-  async clearAll():Promise<void>{await database.transaction(async tx=>{await tx.execute('DELETE FROM generated_contents');await tx.execute('DELETE FROM chat_sessions');await tx.execute('UPDATE document_chunks SET embedding=NULL');await tx.execute(`UPDATE documents SET embedding_status='waiting_for_model'`);});},
+  async clearAll():Promise<void>{await database.transaction(async tx=>{await tx.execute('DELETE FROM generation_jobs');await tx.execute('DELETE FROM generated_contents');await tx.execute('DELETE FROM chat_sessions');await tx.execute('UPDATE document_chunks SET embedding=NULL');await tx.execute(`UPDATE documents SET embedding_status='waiting_for_model'`);});},
 };
 
 export const NoteRepository = {
@@ -148,4 +162,36 @@ export const ChatRepository={
     await tx.execute('INSERT INTO chat_sessions(id,document_id,title,created_at,updated_at) VALUES(?,?,?,?,?)',[session,documentId,question.slice(0,80),timestamp,timestamp]);
     await tx.execute(`INSERT INTO chat_messages(id,session_id,role,content,source_chunk_ids,generation_status,created_at) VALUES(?,?,?,?,?,'completed',?)`,[createId(),session,'user',question,'[]',timestamp]);
     await tx.execute(`INSERT INTO chat_messages(id,session_id,role,content,source_chunk_ids,generation_status,created_at) VALUES(?,?,?,?,?,'completed',?)`,[createId(),session,'assistant',answer,JSON.stringify(sourceIds),timestamp]);});},
+};
+
+export const GenerationJobRepository = {
+  async create(input: {kind: GenerationJobKind; documentId: string; generationType: GenerationType | null; input: string}): Promise<GenerationJobRecord> {
+    const id = createId(); const timestamp = now();
+    await database.execute(`INSERT INTO generation_jobs(id,kind,document_id,generation_type,input,status,created_at,updated_at)
+      VALUES(?,?,?,?,?,'queued',?,?)`, [id,input.kind,input.documentId,input.generationType,input.input,timestamp,timestamp]);
+    return (await this.get(id))!;
+  },
+  async get(id: string): Promise<GenerationJobRecord | null> {
+    const r = await database.execute('SELECT * FROM generation_jobs WHERE id=?', [id]);
+    return r.rows[0] ? mapGenerationJob(r.rows[0]) : null;
+  },
+  async nextQueued(): Promise<GenerationJobRecord | null> {
+    const r = await database.execute(`SELECT * FROM generation_jobs WHERE status='queued' ORDER BY created_at LIMIT 1`);
+    return r.rows[0] ? mapGenerationJob(r.rows[0]) : null;
+  },
+  async update(id: string, patch: Partial<Pick<GenerationJobRecord,'status'|'progress'|'result'|'error'|'attempts'>>): Promise<GenerationJobRecord> {
+    const current = await this.get(id); if(!current) throw new Error('Generation job no longer exists.');
+    await database.execute(`UPDATE generation_jobs SET status=?,progress=?,result=?,error=?,attempts=?,updated_at=? WHERE id=?`,[
+      patch.status??current.status,patch.progress??current.progress,patch.result===undefined?current.result:patch.result,
+      patch.error===undefined?current.error:patch.error,patch.attempts??current.attempts,now(),id]);
+    return (await this.get(id))!;
+  },
+  async requeueInterrupted(): Promise<void> {
+    await database.execute(`UPDATE generation_jobs SET status='queued',error=NULL,updated_at=? WHERE status='running'`,[now()]);
+  },
+  async latestCompletedAsk(documentId: string): Promise<GenerationJobRecord | null> {
+    const r = await database.execute(`SELECT * FROM generation_jobs WHERE document_id=? AND kind='ask' AND status='completed'
+      ORDER BY updated_at DESC LIMIT 1`,[documentId]);
+    return r.rows[0] ? mapGenerationJob(r.rows[0]) : null;
+  },
 };

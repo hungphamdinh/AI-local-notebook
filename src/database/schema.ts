@@ -62,6 +62,12 @@ CREATE TABLE IF NOT EXISTS processing_jobs(
  error TEXT, attempts INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
  FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS generation_jobs(
+ id TEXT PRIMARY KEY, kind TEXT NOT NULL, document_id TEXT NOT NULL, generation_type TEXT, input TEXT NOT NULL DEFAULT '',
+ status TEXT NOT NULL, progress REAL NOT NULL DEFAULT 0, result TEXT, error TEXT, attempts INTEGER NOT NULL DEFAULT 0,
+ created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+ FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_documents_title ON documents(title);
 CREATE INDEX IF NOT EXISTS idx_documents_created ON documents(created_at DESC);
@@ -69,5 +75,7 @@ CREATE INDEX IF NOT EXISTS idx_sections_document ON document_sections(document_i
 CREATE INDEX IF NOT EXISTS idx_chunks_document ON document_chunks(document_id, chunk_index);
 CREATE INDEX IF NOT EXISTS idx_notes_document ON notes(document_id, is_pinned DESC, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_session ON chat_messages(session_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_generation_jobs_queue ON generation_jobs(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_generation_jobs_document ON generation_jobs(document_id, updated_at DESC);
 CREATE VIRTUAL TABLE IF NOT EXISTS document_fts USING fts5(document_id UNINDEXED, title, body);
 `;

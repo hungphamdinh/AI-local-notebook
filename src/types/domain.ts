@@ -1,5 +1,6 @@
 export type FileType = 'pdf' | 'txt' | 'md' | 'text';
 export type JobStatus = 'queued' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
+export type GenerationJobKind = 'summary' | 'ask';
 export type GenerationType =
   | 'short_summary'
   | 'detailed_summary'
@@ -27,6 +28,8 @@ export interface DocumentRecord {
   updatedAt: string;
   lastOpenedAt: string | null;
 }
+
+export type DocumentListRecord = Omit<DocumentRecord,'extractedText'>;
 
 export interface SectionRecord {
   id: string;
@@ -93,4 +96,19 @@ export interface PdfExtractionResult {
   pages: string[];
   pageCount: number;
   usedOcr: boolean;
+}
+
+export interface GenerationJobRecord {
+  id: string;
+  kind: GenerationJobKind;
+  documentId: string;
+  generationType: GenerationType | null;
+  input: string;
+  status: JobStatus;
+  progress: number;
+  result: string | null;
+  error: string | null;
+  attempts: number;
+  createdAt: string;
+  updatedAt: string;
 }

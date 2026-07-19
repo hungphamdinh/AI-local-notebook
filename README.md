@@ -17,6 +17,7 @@ LocalNote AI is a standalone, local-first React Native application for importing
 - Library, onboarding, import, overview, reader, notes/highlights, Ask, details, and settings screens.
 - Reading and notes work without AI models.
 - Optional Ollama provider for generation and embeddings on a configured local computer.
+- Persistent summary and Ask jobs that continue under an Android foreground-service notification and recover after interruption or relaunch.
 
 Document content is never sent to a cloud inference service. Internet permission is used only when the user explicitly downloads model files.
 
@@ -40,7 +41,7 @@ npm test
 
 ## Automated release builds
 
-Use the release wrapper to build either platform or both. It copies the final artifacts and SHA-256 files into `artifacts/release`:
+Use the separate Android and iOS scripts through npm. The combined command runs them sequentially. Each script copies its final artifact and SHA-256 file into `artifacts/release`:
 
 ```bash
 npm run release:android
@@ -58,7 +59,7 @@ IOS_EXPORT_METHOD=app-store-connect npm run release:ios
 IOS_EXPORT_OPTIONS_PLIST=/absolute/path/ExportOptions.plist npm run release:ios
 ```
 
-Set `CLEAN_BUILD=1` for clean native builds or `OUTPUT_DIR=/absolute/path` to change the artifact destination. Run `./scripts/build-release.sh --help` for all options. Signing certificates, profiles and generated artifacts are not stored by the script.
+Set `CLEAN_BUILD=1` for clean native builds or `OUTPUT_DIR=/absolute/path` to change the artifact destination. Run `./scripts/build-android-release.sh --help` or `./scripts/build-ios-release.sh --help` for platform-specific options. Signing certificates, profiles and generated artifacts are not stored by the scripts.
 
 ### iOS
 
@@ -106,7 +107,7 @@ src/
   database/      migrations and repositories
   documents/     import, normalization, sections and chunks
   navigation/    typed React Navigation routes
-  native/        typed PDF adapter boundary
+  native/        typed PDF and background-execution adapter boundaries
   screens/       product screens
   services/      idempotent document and AI pipeline
   stores/        transient Zustand state
@@ -131,7 +132,7 @@ Large document bodies and embeddings stay in SQLite, not Zustand. Native inferen
 - Handwriting, damaged scans, unusual fonts and complex multi-column layouts can reduce OCR/text ordering quality.
 - The mobile-sized models favor device compatibility over desktop-model quality.
 - Model speed and memory limits vary by physical device; simulators are not representative.
-- Background execution is persisted as processing state, but iOS may suspend CPU-heavy work when the app is backgrounded.
+- iOS grants only finite background execution time. Generation continues while that allowance remains; interrupted jobs stay private in SQLite and resume on the next launch.
 
 ## Roadmap
 
